@@ -1,33 +1,124 @@
-from fastapi import FastAPI
-import pymongo
+#!/usr/bin/env python3
 
-# formamos la URI de conexión al servidor local
-uri_mongo = "mongodb://root:example@127.0.0.1/?retryWrites=true&w=majority"
+import uvicorn
 
-# Conectar al servicio MongoDB
-con_local = pymongo.MongoClient(uri_mongo)
-mongodb = con_local["subvenciones"]
-mongocol = mongodb.get_collection("granted_benefits")
+from pydantic import BaseModel
 
+from bson import SON
+from motor.motor_asyncio import AsyncIOMotorClient
 
+from fastapi import FastAPI, Query
+from fastapi_pagination import  Page, add_pagination, Params as BaseParams
+from fastapi_pagination.ext.motor import paginate
+from fastapi_pagination.links.default import Page
 
+#############################################
+#
+# Needed variables
+#
+#############################################
+# MongoDB URI style: mongodb://user:password@host:port
+uri_mongo = "mongodb://root:example@127.0.0.1:27017"
 app = FastAPI()
+client: AsyncIOMotorClient
 
 
-# @app.get("/")
-# async def root():
-#     return {"message": "Hello World"}
+#############################################
+#
+# Fastapi_pagination's params changes
+#
+#############################################
+from typing import TypeVar, Generic
+T = TypeVar("T")
+
+class Params(BaseParams):
+    # to change limits
+    size: int = Query(100, ge=1, le=1000, description="Page size")
+
+class Page(Page[T], Generic[T]):
+    __params_type__ = Params
 
 
-# @app.get("/items/{item_id}")
-# async def read_item(item_id: int):
-#     return {"item_id": item_id}
+#############################################
+#
+# Documents to Objects 
+#
+#############################################
+class Beneficiary(BaseModel):
+    id:   str
+    name: str
 
-@app.get("/granted-benefits")
+class Granted(BaseModel):
+    date: str # MUST BE CHANGED
+    amount: float
+
+class GrantedBenefit(BaseModel):
+    _id: int
+    oid: str
+    benefitId: str
+    # nameByLang: str
+    beneficiary: Beneficiary
+    granted: Granted
+    importPackageOid: str
+    class Config:
+        orm_mode = True
+
+
+#############################################
+#
+# API's endpoints
+#
+#############################################
+@app.on_event("startup")
+async def on_startup() -> None:
+    global client
+    client = AsyncIOMotorClient(uri_mongo)
+
+
+@app.get("/")
+async def root():
+    return {"message": "Hello to the API"}
+
+
+@app.get("/granted-benefits/ranking")
+async def get_ranking():
+    # MongoDB query:
+    # db.granted_benefits.aggregate([{
+    #     $group: { 
+    #         _id: { nif: "$beneficiary.id" }, 
+    #         totalAmount: { $sum:"$granted.amount"},
+    #         count: { $sum: 1 }  
+    #     }
+    # }]).sort({totalAmount:-1})
+
+    pipeline = [
+        {"$group": {
+                "_id": { "nif": "$beneficiary.id" },
+                "totalAmount": { "$sum":"$granted.amount" },
+                "count": { "$sum": 1 }
+            }
+        },
+        {"$sort": SON([("count", -1)])},
+        {"$limit": 50}
+    ]
+    x = client.subvenciones.granted_benefits.aggregate(pipeline)
+    
+    return await x.to_list(length=None)
+
+
+@app.get("/granted-benefits",response_model=Page[GrantedBenefit])
 async def get_granted_benefits():
-    x = mongocol.find({},{'_id': 0})[0]
-    return x
+    return await paginate(client.subvenciones.granted_benefits)
 
-@app.get("/granted-benefits/{beneficiaryId}")
+
+@app.get("/granted-benefits/{beneficiaryId}",response_model=Page[GrantedBenefit])
 async def get_granted_benefits_by_beneficiary(beneficiaryId: str):
-    return {"XX"}
+    return await paginate(client.subvenciones.granted_benefits,{"beneficiary.id": beneficiaryId})
+
+
+# Add pagination to the API
+add_pagination(app)
+
+
+if __name__ == "__main__":
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True, log_level="info")

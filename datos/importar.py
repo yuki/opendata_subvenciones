@@ -13,13 +13,11 @@ mongodb = con_local["subvenciones"]
 
 
 
-def descargar_datos(url,importa):
-    datos = re.get(url).json()
-    return datos[importa]
-
-
 def organizationGroups():
-    x = descargar_datos("https://api.euskadi.eus/granted-benefit/v1.0/organizationGroups","organizationGroups")
+    url = "https://api.euskadi.eus/granted-benefit/v1.0/organizationGroups"
+    datos = re.get(url).json()
+    mongodb.organizationGroups.insert_many(datos["organizationGroups"])
+
 
 def subvenciones():
     page = 1
@@ -37,6 +35,7 @@ def subvenciones():
 
 def main():
     print("Inicio")
+    organizationGroups()
     subvenciones()
     print("Fin")
 
