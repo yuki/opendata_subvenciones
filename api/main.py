@@ -77,6 +77,9 @@ async def on_startup() -> None:
 
 @app.get("/")
 async def root():
+    """
+    Return: "Hello to the API"
+    """
     return {"message": "Hello to the API"}
 
 
@@ -102,7 +105,6 @@ async def get_ranking():
         {"$limit": 50}
     ]
     x = client.subvenciones.granted_benefits.aggregate(pipeline)
-    
     return await x.to_list(length=None)
 
 
@@ -111,8 +113,26 @@ async def get_granted_benefits():
     return await paginate(client.subvenciones.granted_benefits)
 
 
-@app.get("/granted-benefits/{beneficiaryId}",response_model=Page[GrantedBenefit])
+
+@app.get("/granted-benefits/SearchBeneficiaryName/{beneficiaryName}")
+async def get_granted_benefits_by_beneficiary(beneficiaryName: str):
+    # MongoDB query: 
+    #   db.granted_benefits.aggregate([
+    #       {$match:{"beneficiary.name":{$regex:"XXX","$options":"i"}}}, 
+    #       {$group: {"_id":"$beneficiary.id", "name":{ "$first": { "$toUpper": "$beneficiary.name"}  }}}
+    #   ])
+    pipeline = [
+        {"$match": {"beneficiary.name":{"$regex":beneficiaryName,"$options":"i"}}},
+        {"$group": {"_id":"$beneficiary.id", "name":{ "$first": { "$toUpper": "$beneficiary.name"}}}}
+    ]
+    x = client.subvenciones.granted_benefits.aggregate(pipeline)
+    return await x.to_list(length=None)
+
+
+
+@app.get("/granted-benefits/byBeneficiary/{beneficiaryId}",response_model=Page[GrantedBenefit])
 async def get_granted_benefits_by_beneficiary(beneficiaryId: str):
+    # MongoDB query: db.granted_benefits.find({"beneficiary.id":"beneficiaryId"})
     return await paginate(client.subvenciones.granted_benefits,{"beneficiary.id": beneficiaryId})
 
 
