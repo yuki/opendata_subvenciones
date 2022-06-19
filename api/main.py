@@ -8,6 +8,7 @@ from bson import SON
 from motor.motor_asyncio import AsyncIOMotorClient
 
 from fastapi import FastAPI, Query
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi_pagination import  Page, add_pagination, Params as BaseParams
 from fastapi_pagination.ext.motor import paginate
 from fastapi_pagination.links.default import Page
@@ -20,6 +21,18 @@ from fastapi_pagination.links.default import Page
 # MongoDB URI style: mongodb://user:password@host:port
 uri_mongo = "mongodb://root:example@127.0.0.1:27017"
 app = FastAPI()
+
+## CORS should be disabled
+origins = ["*"]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 client: AsyncIOMotorClient
 
 

@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
 
+# Con este script importamos todos los datos de la API de OpenDATA del Gobierno Vasco
+# de las subvenciones otorgadas.
+# La idea es primer hacer la importación y después realizar un parseo con los datos en local.
+
 import requests as re
 import json
 import pymongo
